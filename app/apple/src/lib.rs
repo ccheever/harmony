@@ -2,7 +2,6 @@
 //! native Snapback4 device.
 
 include!(concat!(env!("OUT_DIR"), "/module.rs"));
-const BYTECODE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/app.hbc"));
 
 /// The Snapback4 device as the data module's native module
 /// (snapback4/README.md, "From TypeScript"): one partition at a time, under
@@ -22,7 +21,7 @@ fn snapback(_source: &str) -> Box<dyn exact_js::NativeModule> {
 
 type ExactEmbeddedData = exact_js::Placed<exact_js::Module>;
 fn embedded_data() -> ExactEmbeddedData {
-    exact_js::Module::new(BYTECODE.to_vec(), APP, GRANTS)
+    exact_js::Module::new(APP_BYTECODE, APP, GRANTS)
         .with_canvas_surfaces(CANVAS_SURFACES)
         .with_native(snapback)
         .placed(TYPESCRIPT_PLACEMENT)

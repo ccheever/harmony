@@ -33,6 +33,19 @@ const unknown = (principal: string): Person => ({ key: keyOf(principal), princip
 const dayKey = (at: number, offsetMinutes: number) => Math.floor((at + offsetMinutes * 60_000) / DAY);
 const mentions = (body: string, handle: string) => new RegExp(`(^|[^\\w])@(${handle}|everyone|here)(?![\\w])`, 'i').test(body);
 
+// Local-first: a message write (send, edit, delete, react, pin) shows at once.
+// The read its `refreshes` starts answers from the device, the write's
+// predicted rows `pending: true`, and runs no round; the view's next read
+// (each of those mutations' `then` moves the clock) runs the round that
+// delivers it. Nothing runs after an answer ends, so natively the device
+// still serves one answer at a time.
+const unshown = new Set<string>();
+let lastOnline = true;
+function shown(persona: string, written: Write): Write {
+  if (written.state === 'pending') unshown.add(persona);
+  return written;
+}
+
 function admit(written: Write): Result<'sendMessage'> {
   if (written.state === 'failed') throw refused(written.why);
   return { ok: true, id: written.newIds[0] ?? '' };
@@ -134,7 +147,8 @@ async function threadOf(db: Db, roomId: string, now: number, offset: number, me:
 
 const sources: Sources = {
   snapshot: ([persona, roomId, q, now, offset], _store, storage, native) => personas.use(persona, storage, native, async (db): Promise<Result<'snapshot'>> => {
-    const round = await db.sync();
+    const round = unshown.delete(persona) ? { ok: lastOnline } : await db.sync();
+    lastOnline = round.ok;
     const who = await directory(db, now);
     const me = who.get(`dev:${persona}`) ?? unknown(`dev:${persona}`);
     const custom = await emojiTable(db, now);
@@ -164,17 +178,17 @@ const sources: Sources = {
   // so no write waits on one; a device refusal (a `require`, a unique
   // clash it can see) is thrown here, a server refusal lands in `refusals()`.
   sendMessage: ([persona, roomId, body, replyToId], _store, storage, native) => personas.use(persona, storage, native, async (db): Promise<Result<'sendMessage'>> =>
-    admit(await db.write(api.sendMessage, { roomId, body, replyToId: replyToId ?? null }, 0))),
+    admit(shown(persona, await db.write(api.sendMessage, { roomId, body, replyToId: replyToId ?? null }, 0)))),
   editMessage: ([persona, messageId, body], _store, storage, native) => personas.use(persona, storage, native, async (db): Promise<Result<'editMessage'>> =>
-    admit(await db.write(api.editMessage, { messageId, body }, 0))),
+    admit(shown(persona, await db.write(api.editMessage, { messageId, body }, 0)))),
   deleteMessage: ([persona, messageId], _store, storage, native) => personas.use(persona, storage, native, async (db): Promise<Result<'deleteMessage'>> =>
-    admit(await db.write(api.deleteMessage, { messageId }, 0))),
+    admit(shown(persona, await db.write(api.deleteMessage, { messageId }, 0)))),
   react: ([persona, messageId, emoji], _store, storage, native) => personas.use(persona, storage, native, async (db): Promise<Result<'react'>> => {
     if (!UNICODE.includes(emoji) && !/^:[a-z0-9_]{2,32}:$/.test(emoji) && [...emoji].length > 4) throw refused({ code: 'E_INPUT', message: 'Not an emoji.' });
-    return admit(await db.write(api.react, { messageId, emoji }, 0));
+    return admit(shown(persona, await db.write(api.react, { messageId, emoji }, 0)));
   }),
   pin: ([persona, messageId], _store, storage, native) => personas.use(persona, storage, native, async (db): Promise<Result<'pin'>> =>
-    admit(await db.write(api.pin, { messageId }, 0))),
+    admit(shown(persona, await db.write(api.pin, { messageId }, 0)))),
   setTyping: ([persona, roomId], _store, storage, native) => personas.use(persona, storage, native, async (db): Promise<Result<'setTyping'>> =>
     admit(await db.write(api.setTyping, { roomId }, 0))),
   markRead: ([persona, roomId], _store, storage, native) => personas.use(persona, storage, native, async (db): Promise<Result<'markRead'>> =>

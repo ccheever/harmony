@@ -192,9 +192,9 @@ component Harmony
 
   mutation sent as shape Ack queue refreshes world then afterSend
   mutation edited as shape Ack queue refreshes world then afterEdit
-  mutation removed as shape Ack queue refreshes world
-  mutation reacted as shape Ack queue refreshes world
-  mutation pinToggled as shape Ack queue refreshes world
+  mutation removed as shape Ack queue refreshes world then resync
+  mutation reacted as shape Ack queue refreshes world then resync
+  mutation pinToggled as shape Ack queue refreshes world then resync
   mutation typed as shape Ack queue
   mutation readMarked as shape Ack queue refreshes world
   mutation channelCreated as shape Ack refreshes world then afterChannel
@@ -266,6 +266,10 @@ component Harmony
   action afterEdit
     draft = ""
     editing = ""
+    sampledAt = performanceNow()
+  // After a message write the view showed predicted, the read that delivers it.
+  action resync
+    sampledAt = performanceNow()
   action cancelCompose
     replyTo = ""
     editing = ""
@@ -422,8 +426,8 @@ component Harmony
                           header
                             text c.name
                           for r in c.rooms key=r.id
-                            link href=path("room", r.id) display="flex" align-items="center" gap=12 testId=`room-${r.name}`
-                              text "#" aria-hidden=true color="-exact-secondary-label" font="-exact-title3" flex-shrink=0 width="1.25rem" text-align="center"
+                            link href=path("room", r.id) display="flex" align-items="center" testId=`room-${r.name}`
+                              image "symbol:hashtag" aria-hidden=true color="-exact-secondary-label"
                               column flex=1 min-width=0
                                 text r.name font-weight=(r.unread > 0 ? 600 : 400) line-clamp=1 testId=`room-name-${r.name}`
                                 if r.topic != ""

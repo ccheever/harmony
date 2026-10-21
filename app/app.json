@@ -46,5 +46,13 @@
       "../seed.mjs",
       "--post"
     ]
-  }
+  },
+  "icons": [
+    {
+      "src": "assets/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ],
+  "background_color": "#7a4fd6"
 }
